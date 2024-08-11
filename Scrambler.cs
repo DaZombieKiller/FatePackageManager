@@ -17,9 +17,14 @@ internal static class Scrambler
 
     public static void UnScrambleData(ReadOnlySpan<UInt128> keys, Span<byte> buffer, int keyOffset)
     {
+        UnScrambleData(keys, buffer, buffer, keyOffset);
+    }
+
+    public static void UnScrambleData(ReadOnlySpan<UInt128> keys, ReadOnlySpan<byte> buffer, Span<byte> destination, int keyOffset)
+    {
         for (int i = 0, j = keyOffset; i < buffer.Length; i++, j++)
         {
-            buffer[i] ^= (byte)(keys[(j / 16) % keys.Length] >> (j & 15) * 8);
+            destination[i] = (byte)(buffer[i] ^ ((byte)(keys[(j / 16) % keys.Length] >> (j & 15) * 8)));
         }
     }
 
