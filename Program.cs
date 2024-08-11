@@ -14,7 +14,7 @@ if (args[0] == "pack" && args.Length == 3)
 {
     var pack = new PackFile(keys);
 
-    foreach (string path in Directory.GetFiles(args[1], "*.*", SearchOption.AllDirectories))
+    foreach (string path in Directory.EnumerateFiles(args[1], "*.*", SearchOption.AllDirectories))
         pack.AddEntry(new FileInfo(path), Path.GetRelativePath(args[1], path).Replace('\\', '/'));
 
     pack.Write(args[2]);

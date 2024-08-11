@@ -45,7 +45,7 @@ internal sealed class XorStream : Stream
     {
         long pos = _stream.Position;
         int read = _stream.Read(buffer, offset, count);
-        Scrambler.UnScrambleData(_keys, buffer.AsSpan(offset, read), _keyOffset + (int)pos);
+        Scrambler.ScrambleData(_keys, buffer.AsSpan(offset, read), _keyOffset + (int)pos);
         return read;
     }
 
@@ -53,7 +53,7 @@ internal sealed class XorStream : Stream
     {
         long pos = _stream.Position;
         int read = _stream.Read(buffer);
-        Scrambler.UnScrambleData(_keys, buffer[..read], _keyOffset + (int)pos);
+        Scrambler.ScrambleData(_keys, buffer[..read], _keyOffset + (int)pos);
         return read;
     }
 
@@ -80,7 +80,7 @@ internal sealed class XorStream : Stream
     public override void Write(ReadOnlySpan<byte> buffer)
     {
         var array = ArrayPool<byte>.Shared.Rent(buffer.Length);
-        Scrambler.UnScrambleData(_keys, buffer, array, _keyOffset + (int)_stream.Position);
+        Scrambler.ScrambleData(_keys, buffer, array, _keyOffset + (int)_stream.Position);
         _stream.Write(array, 0, buffer.Length);
         ArrayPool<byte>.Shared.Return(array);
     }

@@ -10,17 +10,17 @@ internal static class Scrambler
 
     public static ReadOnlySpan<byte> PackFileSalt => "11f32b0d98cfe8395fe4deeb75fff578"u8;
 
-    public static void UnScrambleData(ReadOnlySpan<UInt128> keys, Span<byte> buffer)
+    public static void ScrambleData(ReadOnlySpan<UInt128> keys, Span<byte> buffer)
     {
-        UnScrambleData(keys, buffer, keyOffset: 0);
+        ScrambleData(keys, buffer, keyOffset: 0);
     }
 
-    public static void UnScrambleData(ReadOnlySpan<UInt128> keys, Span<byte> buffer, int keyOffset)
+    public static void ScrambleData(ReadOnlySpan<UInt128> keys, Span<byte> buffer, int keyOffset)
     {
-        UnScrambleData(keys, buffer, buffer, keyOffset);
+        ScrambleData(keys, buffer, buffer, keyOffset);
     }
 
-    public static void UnScrambleData(ReadOnlySpan<UInt128> keys, ReadOnlySpan<byte> buffer, Span<byte> destination, int keyOffset)
+    public static void ScrambleData(ReadOnlySpan<UInt128> keys, ReadOnlySpan<byte> buffer, Span<byte> destination, int keyOffset)
     {
         for (int i = 0, j = keyOffset; i < buffer.Length; i++, j++)
         {

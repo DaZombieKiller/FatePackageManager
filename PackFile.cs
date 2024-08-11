@@ -42,13 +42,13 @@ internal sealed class PackFile : IDisposable
     {
         var sw = Stopwatch.StartNew();
 
+        // Sort entries
+        _entries.Sort(EntrySortComparer.Instance);
+
         // Generate name buffer
         byte[] nameBuffer;
         var nameOffset = new int[_entries.Count];
         var dataOffset = new long[_entries.Count];
-
-        // Sort entries
-        _entries.Sort(EntrySortComparer.Instance);
 
         using (var ms = new MemoryStream())
         {
@@ -114,13 +114,14 @@ internal sealed class PackFile : IDisposable
             {
                 byte* pointer = null;
                 mmv.SafeMemoryMappedViewHandle.AcquirePointer(ref pointer);
+                pointer += headerSize;
 
                 try
                 {
                     Parallel.For(0, _entries.Count, i =>
                     {
                         using var data = _entries[i].OpenRead();
-                        using var umms = new UnmanagedMemoryStream(pointer + headerSize + dataOffset[i], _entries[i].Length, _entries[i].Length, FileAccess.Write);
+                        using var umms = new UnmanagedMemoryStream(pointer + dataOffset[i], _entries[i].Length, _entries[i].Length, FileAccess.Write);
                         data.CopyTo(new XorStream(umms, _keys, leaveOpen: true));
                     });
                 }
