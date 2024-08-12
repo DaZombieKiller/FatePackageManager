@@ -26,8 +26,18 @@ internal sealed class XorStream : Stream
         set => _stream.Position = value;
     }
 
+    public XorStream(Stream stream, UInt128[] keys)
+        : this(stream, keys, leaveOpen: false)
+    {
+    }
+
     public XorStream(Stream stream, UInt128[] keys, bool leaveOpen)
         : this(stream, keys, keyOffset: 0, leaveOpen)
+    {
+    }
+
+    public XorStream(Stream stream, UInt128[] keys, int keyOffset)
+        : this(stream, keys, keyOffset, leaveOpen: false)
     {
     }
 

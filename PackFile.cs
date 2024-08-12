@@ -7,8 +7,10 @@ namespace FatePackageManager;
 
 internal sealed class PackFile : IDisposable
 {
+    // Size of the initial fixed-size portion of the header
     private const int HeaderSize = 0x38;
 
+    // Size of each individual entry descriptor following the fixed-size portion of the header
     private const int EntrySize = 0x20;
 
     private readonly Stream? _stream;
@@ -25,10 +27,11 @@ internal sealed class PackFile : IDisposable
         : this(keys)
     {
         _stream = stream;
-        stream.ReadInt32BigEndian(); // magic
-        stream.ReadInt32BigEndian(); // version?
+        stream.ReadInt32BigEndian(); // magic (FPD\x00)
+        stream.ReadInt32BigEndian(); // version (1 or 2)
         var fileCount = stream.ReadInt64BigEndian();
         _dataStartPos = stream.ReadInt64BigEndian();
+        // 32 bytes of unknown data here, usually all zeros
         ReadEntries(fileCount);
     }
 
@@ -42,7 +45,9 @@ internal sealed class PackFile : IDisposable
     {
         var sw = Stopwatch.StartNew();
 
-        // Sort entries
+        // Package entries must be sorted based on the UTF8 representation
+        // of the entry's full name. The game probably does a binary search
+        // on the entries array to locate things in the package.
         _entries.Sort(EntrySortComparer.Instance);
 
         // Generate name buffer
@@ -59,10 +64,11 @@ internal sealed class PackFile : IDisposable
                 ms.WriteByte(0);
             }
 
-            // Align to 16 bytes
+            // The name buffer is padded to 16 bytes with zeroes.
             while ((ms.Position & 0x0F) != 0)
                 ms.WriteByte(0);
 
+            // Name buffer is ZLib compressed with default compression
             ms.TryGetBuffer(out var buffer);
             nameBuffer = Deflate(buffer, CompressionLevel.Optimal);
         }
@@ -77,17 +83,27 @@ internal sealed class PackFile : IDisposable
         // Generate
         using (var stream = File.Create(destination))
         {
+            // Preallocate space for file
             stream.SetLength(totalSize);
 
             // Write header
             stream.Write("FPD\x00"u8);
+
+            // Version
+            // 1 - Android (FSN Realta Nua)
+            // 2 - PC, Switch (FSN Remastered)
+            // Differences between v1 and v2 not yet researched.
             stream.WriteInt32BigEndian(2);
+
             stream.WriteInt64BigEndian(_entries.Count);
             stream.WriteInt64BigEndian(headerSize);
 
+            // Unknown. Potentially reserved/debug only values
             for (int i = 0; i < 4; i++)
                 stream.WriteInt64BigEndian(0);
 
+            // XOR scrambling starts after the fixed-size header.
+            // Pass -HeaderSize as keyOffset so end-of-header is offset 0x00 when scrambling.
             using var xor = new XorStream(stream, _keys, -HeaderSize, leaveOpen: true);
 
             // Write entries
@@ -96,9 +112,16 @@ internal sealed class PackFile : IDisposable
                 if (i > 0)
                     dataOffset[i] = dataOffset[i - 1] + _entries[i - 1].Length;
 
+                // offset relative to name buffer
                 xor.WriteInt64BigEndian(nameOffset[i]);
+
+                // offset relative to data offset in header
                 xor.WriteInt64BigEndian(dataOffset[i]);
+
+                // Length of the data in the FPD
                 xor.WriteInt64BigEndian(_entries[i].Length);
+
+                // Uncompressed length of data or 0 if not compressed
                 xor.WriteInt64BigEndian(0);
             }
 
@@ -120,9 +143,12 @@ internal sealed class PackFile : IDisposable
                 {
                     Parallel.For(0, _entries.Count, i =>
                     {
+                        var dataLength = _entries[i].Length;
                         using var data = _entries[i].OpenRead();
-                        using var umms = new UnmanagedMemoryStream(pointer + dataOffset[i], _entries[i].Length, _entries[i].Length, FileAccess.Write);
-                        data.CopyTo(new XorStream(umms, _keys, leaveOpen: true));
+                        using var dest = new UnmanagedMemoryStream(pointer + dataOffset[i], dataLength, dataLength, FileAccess.Write);
+
+                        // The file data is XOR scrambled individually, not as part of the whole package.
+                        data.CopyTo(new XorStream(dest, _keys));
                     });
                 }
                 finally
@@ -144,7 +170,7 @@ internal sealed class PackFile : IDisposable
 
     private void ReadEntries(long fileCount)
     {
-        using var stream = new XorStream(new SubReadStream(_stream!, HeaderSize, _dataStartPos - HeaderSize), _keys, leaveOpen: false);
+        using var stream = new XorStream(new SubReadStream(_stream!, HeaderSize, _dataStartPos - HeaderSize), _keys);
 
         // Read the names buffer first
         stream.Position = EntrySize * fileCount;
@@ -231,7 +257,7 @@ internal sealed class PackFile : IDisposable
 
         public override Stream OpenRead()
         {
-            Stream stream = new XorStream(new SubReadStream(Pack._stream!, Pack._dataStartPos + Offset, Length), Pack._keys, leaveOpen: false);
+            Stream stream = new XorStream(new SubReadStream(Pack._stream!, Pack._dataStartPos + Offset, Length), Pack._keys);
 
             if (UncompressedLength != 0)
                 stream = new ZLibStream(stream, CompressionMode.Decompress);
